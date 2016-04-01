@@ -32,18 +32,13 @@ namespace EmguProcess
             dbConn.Open();
             dbConn.Close();
 
-            //Console.WriteLine("State: {0}", dbConn.State);
-
-            //Console.WriteLine("Hello World");
-            //Console.WriteLine("These are the args");
             string fileLocation = args[0];
             string xmlLocation = args[1];
             int videoID = Convert.ToInt32(args[2]);
 
-            //Console.WriteLine(fileLocation);
+            Console.WriteLine(fileLocation);
             Capture video = new Capture(fileLocation);
             //string xml = "haarcascade_frontalface_alt2.xml";
-
 
             CascadeClassifier frontalFaces = new CascadeClassifier(xmlLocation);
             double frameNum = video.GetCaptureProperty(Emgu.CV.CvEnum.CapProp.FrameCount);
@@ -64,9 +59,6 @@ namespace EmguProcess
                     cmd.Connection.Open();
                     cmd.ExecuteNonQuery();
                     dbConn.Close();
-                    //Console.WriteLine("Updated  Database on frame {0}, State: {1}", i,dbConn.State);
-
-
                 }
                 currentFrame = i;
                 video.SetCaptureProperty(Emgu.CV.CvEnum.CapProp.PosFrames, i);
@@ -115,19 +107,16 @@ namespace EmguProcess
 
 
             JavaScriptSerializer Jserializer = new JavaScriptSerializer();
-
-
-
-            string queryString = "UPDATE Videos SET EditedVideo=@FrameList" +
+            string queryString = "UPDATE Videos SET EditedVideo=@FrameList, PercentProcess=@PercentProcess" +
             " WHERE VideoId=@Id";
             SqlCommand command = new SqlCommand(queryString, dbConn);
             command.Parameters.AddWithValue("@FrameList", Jserializer.Serialize(FrameList));
             command.Parameters.AddWithValue("@Id", videoID);
+            command.Parameters.AddWithValue("@PercentProcess", 100);
+            StringBuilder errorMessages = new StringBuilder();
             command.Connection.Open();
             command.ExecuteNonQuery();
             dbConn.Close();
-            //Console.WriteLine("Final update sent to DB, State: {0}", dbConn.State);
-
         }
     }
 }

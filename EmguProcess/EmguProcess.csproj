@@ -133,6 +133,9 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="x86\cvextern.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="FodyWeavers.xml" />
     <Content Include="msvcp120.dll" />
     <Content Include="msvcr120.dll" />
@@ -158,7 +161,7 @@
     <Content Include="opencv_superres2410d.dll" />
     <Content Include="opencv_video2410d.dll" />
     <Content Include="opencv_videostab2410d.dll" />
-    <Content Include="x86\cvextern.dll">
+    <Content Include="cvextern.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="x86\opencv_ffmpeg300.dll">
