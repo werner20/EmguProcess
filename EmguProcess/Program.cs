@@ -3,6 +3,8 @@
         1. Frontal Face Tracking
         2. Profile Face Tracking
         3. Video Encoding
+
+   Sometimes the encoder hangs for longer videos, it's likely and internal data structure problem
 */
 using System;
 using System.Collections.Generic;
@@ -234,7 +236,7 @@ namespace EmguProcess
             Jdeserializer.MaxJsonLength = 2000000000;
 
             List<List<Rectangle>> RectangleList = Jdeserializer.Deserialize<List<List<Rectangle>>>(rectStruct);
-            List<List<int>> EffectList = new JavaScriptSerializer().Deserialize<List<List<int>>>(intStruct);
+            List<List<int>> EffectList = Jdeserializer.Deserialize<List<List<int>>>(intStruct);
             List<List<Pair>> FramesList = new List<List<Pair>>();
 
             for(int i = 0; i < RectangleList.Count; i++)
@@ -310,9 +312,10 @@ namespace EmguProcess
 
             CloudBlockBlob editedVid = container.GetBlockBlobReference(vidNum + "_output.mp4");
             var upStream = System.IO.File.OpenRead(mp4outloc);
-            editedVid.UploadFromStreamAsync(upStream);
+            //editedVid.UploadFromStreamAsync(upStream);
 
             editedVid.UploadFromStream(upStream);
+
             //await editedVid.UploadFromStreamAsync(upStream);
 
 
@@ -329,7 +332,7 @@ namespace EmguProcess
             cmd.ExecuteNonQuery();
             cmd.Connection.Close();
 
-            return;
+
 
         }
     }
