@@ -24,6 +24,7 @@ using Microsoft.WindowsAzure;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
+using System.Configuration;
 using System.IO;
 using Emgu.CV;
 using Emgu.Util;
@@ -34,10 +35,11 @@ using System.Data.SqlClient;
 using System.Diagnostics;
 namespace EmguProcess
 {
-    class FaceTracking
+    class EmguFunctionality
     {
         static void Main(string[] args)
-        {
+        { 
+            //connect to the database and blob storage           
             SqlConnection dbConn = new SqlConnection();
             dbConn.ConnectionString = ("Server = tcp:capstonettdb2016.database.windows.net,1433; Database = CapstoneTT2016_db; User ID = dbadmin@capstonettdb2016; Password =TeamTechSMith85*; Encrypt = True; TrustServerCertificate = False; Connection Timeout = 30;");
             dbConn.Open();
@@ -55,6 +57,7 @@ namespace EmguProcess
             CloudBlockBlob blockblob = container.GetBlockBlobReference(blobname);
             string storageloc;
 
+            //get the locations of the various xml files required
             if (xmlLocation != "encode")
             {
                 if (xmlLocation == "D:/home/site/wwwroot/bin/haarcascade_frontalface_alt2.xml")
@@ -82,17 +85,25 @@ namespace EmguProcess
                 export(storageloc, videoID, dbConn, container);
             }
         }
+        /* Function Track
+         *
+         * fileLocation = location of the video in the file system
+         * xmlLocation = location of xmlLocation in the filesystem
+         * videoID = the id of the video inside the database
+         * dbConn = a reference to the database connection created before the funciton call
+         */
         static void track(string fileLocation, string xmlLocation, int videoID, ref SqlConnection dbConn)
         {
             Capture video = new Capture(fileLocation);
-            //string xml = "haarcascade_frontalface_alt2.xml";
-            CascadeClassifier frontalFaces = new CascadeClassifier(xmlLocation);
+            CascadeClassifier frontalFaces = new CascadeClassifier(xmlLocation);            
+
             double frameNum = video.GetCaptureProperty(Emgu.CV.CvEnum.CapProp.FrameCount);
             List<List<Rectangle>> FrameList = new List<List<Rectangle>>();
-            double currentFrame;
+            double currentFrame;            
 
             for (double i = 0; i < frameNum; i++)
             {
+                //writes to the database everytime 10 frames are processed. This correlates to the update bar on the lib page
                 if (i % 10 == 0)
                 {
                     string query = "";
@@ -119,9 +130,13 @@ namespace EmguProcess
 
                 if (frame != null)
                 {
+                    //images need to be grayscale to be run through face detection
                     Image<Bgr, byte> frameImage = frame.ToImage<Bgr, byte>();
                     Image<Gray, byte> grayFrameImage = frameImage.Convert<Gray, byte>();
-                    Rectangle[] frontalArray = frontalFaces.DetectMultiScale(grayFrameImage);
+                    grayFrameImage._EqualizeHist();
+
+                    //does the actual detection
+                    Rectangle[] frontalArray = frontalFaces.DetectMultiScale(grayFrameImage,1.1,4);
                     RectanglesMarker marker = new RectanglesMarker(frontalArray, Color.Fuchsia);
 
                     List<Rectangle> faces = new List<Rectangle>();
@@ -134,7 +149,6 @@ namespace EmguProcess
                     {
                         foreach (Rectangle rect in frontalArray)
                         {
-                            //Default all rectangles as effect 1 which is blur
                             faces.Add(rect);
                         }
                     }
@@ -143,6 +157,7 @@ namespace EmguProcess
             }
 
             JavaScriptSerializer Jserializer = new JavaScriptSerializer();
+            Jserializer.MaxJsonLength = 2000000000;
             string queryString = "";
             if (xmlLocation == "D:/home/site/wwwroot/bin/haarcascade_frontalface_alt2.xml")
             {
@@ -162,8 +177,12 @@ namespace EmguProcess
             dbConn.Close();
         }
 
-        /* I figure we can always just have this guy read the list of tuple<rect, int> from the database.EditedVideoSide column and delete it immeadiately afterwords.
-        That's my best genius plan for now, truly a tragedy. */
+        /*function Export
+         * fileLocation = location of the video in the filesystem
+         * videoID = id of the video in the database
+         * dbconn = the database connection established before the function call
+         * container = the blob container created before the function call
+         */
 
         static void export(string fileLocation, int videoID, SqlConnection dbconn, CloudBlobContainer container)
         {
@@ -176,7 +195,8 @@ namespace EmguProcess
             double frameRate = cap.GetCaptureProperty(Emgu.CV.CvEnum.CapProp.Fps);
             int FPS = Convert.ToInt32(frameRate);
             Size vidsize = new Size(w, h);
-            //string outputVideo = fileLocation + "_temp.mpeg";
+
+
             string outputVideo = fileLocation.Split('.')[0] + "_temp1.mpg";
             double frameNum = cap.GetCaptureProperty(Emgu.CV.CvEnum.CapProp.FrameCount);
 
@@ -187,7 +207,6 @@ namespace EmguProcess
             SqlCommand getRect = new SqlCommand(queryString, dbconn);
             getRect.Parameters.AddWithValue("@Id", videoID);
 
-            //string dataStruct = command.ExecuteReader();
             getRect.Connection.Open();
             string rectStruct = (string)getRect.ExecuteScalar();
             getRect.Connection.Close();
@@ -211,7 +230,10 @@ namespace EmguProcess
 
             Pair p = new Pair();
 
-            List<List<Rectangle>> RectangleList = new JavaScriptSerializer().Deserialize<List<List<Rectangle>>>(rectStruct);
+            JavaScriptSerializer Jdeserializer = new JavaScriptSerializer();
+            Jdeserializer.MaxJsonLength = 2000000000;
+
+            List<List<Rectangle>> RectangleList = Jdeserializer.Deserialize<List<List<Rectangle>>>(rectStruct);
             List<List<int>> EffectList = new JavaScriptSerializer().Deserialize<List<List<int>>>(intStruct);
             List<List<Pair>> FramesList = new List<List<Pair>>();
 
@@ -251,7 +273,8 @@ namespace EmguProcess
                    
                 }
                 if (frame != null)
-                {                    
+                {
+                                        
                     Mat blurredObject = new Mat();
                     blurredObject = frame;
 
@@ -286,10 +309,13 @@ namespace EmguProcess
             process.WaitForExit();
 
             CloudBlockBlob editedVid = container.GetBlockBlobReference(vidNum + "_output.mp4");
-            using (var upStream = System.IO.File.OpenRead(mp4outloc))
-            {
-                editedVid.UploadFromStream(upStream);
-            }
+            var upStream = System.IO.File.OpenRead(mp4outloc);
+            editedVid.UploadFromStreamAsync(upStream);
+
+            editedVid.UploadFromStream(upStream);
+            //await editedVid.UploadFromStreamAsync(upStream);
+
+
 
             string vidURI = Convert.ToString(editedVid.Uri);
             //queryString = "INSERT INTO Videos VALUES (Title = @vidTitle,  OriginalVideo = @vidURI)";
@@ -302,6 +328,8 @@ namespace EmguProcess
             cmd.Connection.Open();
             cmd.ExecuteNonQuery();
             cmd.Connection.Close();
+
+            return;
 
         }
     }
